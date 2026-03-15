@@ -6,7 +6,7 @@ site_author = "Arjun"
 site_url = "https://arjunraghurama.github.io/tiny-url"
 
 repo_url = "https://github.com/arjunraghurama/tiny-url"
-repo_name = "tiny-url"
+repo_name = "arjunraghurama/tiny-url"
 
 nav = [
     {"Home" = "index.md"},
