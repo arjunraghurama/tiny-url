@@ -28,7 +28,7 @@ graph LR
 | Backend | FastAPI (Python) | REST API with async support |
 | Cache | Valkey | Redis-compatible in-memory cache |
 | Database | PostgreSQL | Persistent URL storage |
-| Docs | MkDocs Material | This documentation site |
+| Docs | Zensical | This documentation site |
 
 ## Quick Start
 
@@ -41,7 +41,6 @@ docker compose up --build -d
 # Access the services
 # Frontend:  http://localhost:5173
 # Backend:   http://localhost:8000/docs  (Swagger UI)
-# Docs:      http://localhost:8001
 ```
 
 ## How It Works (30-Second Overview)

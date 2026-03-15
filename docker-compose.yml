@@ -52,13 +52,6 @@ services:
     depends_on:
       - backend
 
-  docs:
-    build: ./docs
-    container_name: tinyurl-docs
-    ports:
-      - "8001:8000"
-    volumes:
-      - ./docs:/app
 
 volumes:
   postgres_data:
