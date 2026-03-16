@@ -59,6 +59,7 @@ export default function ShortenForm({ onUrlCreated, isAuthenticated, getToken, o
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="Paste your long URL here..."
+            autoComplete="off"
             required
             disabled={loading}
           />
