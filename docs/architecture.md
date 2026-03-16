@@ -2,7 +2,7 @@
 
 ## High-Level Architecture
 
-The system follows a **3-tier architecture** with a caching layer:
+The system follows a **3-tier architecture** with caching and authentication layers:
 
 ```mermaid
 graph TB
@@ -12,6 +12,10 @@ graph TB
 
     subgraph Frontend
         B["⚛️ React App<br/>Vite Dev Server :5173"]
+    end
+
+    subgraph Auth Layer
+        KC["🔐 Keycloak<br/>Identity Provider :8080"]
     end
 
     subgraph Backend
@@ -24,16 +28,42 @@ graph TB
     end
 
     A -->|"HTTP"| B
-    B -->|"REST API"| C
+    B -->|"OIDC Login"| KC
+    B -->|"REST API + JWT"| C
+    C -->|"JWKS Verify"| KC
     C -->|"Cache-Aside"| D
     C -->|"Async SQLAlchemy"| E
 ```
 
 ## Request Flow
 
+### Authentication Flow
+
+When a user signs in, the frontend uses Keycloak's OIDC flow:
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant R as React Frontend
+    participant KC as Keycloak
+    participant F as FastAPI Backend
+
+    U->>R: Click "Sign In"
+    R->>KC: Redirect to /auth (OIDC Authorization Code)
+    KC->>U: Show login form
+    U->>KC: Enter credentials
+    KC-->>R: Redirect back with auth code
+    R->>KC: Exchange code for tokens
+    KC-->>R: Access token (JWT) + Refresh token
+    R->>F: API calls with Authorization: Bearer <token>
+    F->>KC: Fetch JWKS (cached)
+    F->>F: Validate JWT signature + claims
+    F-->>R: Authenticated response
+```
+
 ### Write Path (Create Short URL)
 
-When a user shortens a URL, the request flows through the system like this:
+When an authenticated user shortens a URL:
 
 ```mermaid
 sequenceDiagram
@@ -44,11 +74,13 @@ sequenceDiagram
     participant V as Valkey Cache
 
     U->>R: Paste long URL & click "Shorten"
-    R->>F: POST /api/shorten {"url": "https://..."}
+    R->>F: POST /api/shorten + Bearer token
+    F->>F: Validate JWT token
     F->>F: generate_short_code() → "kX9mBzQ"
     F->>P: SELECT id FROM urls WHERE short_code='kX9mBzQ'
     P-->>F: null (no collision)
-    F->>P: INSERT INTO urls (original_url, short_code='kX9mBzQ')
+    F->>P: Get/create user from JWT claims
+    F->>P: INSERT INTO urls (original_url, short_code, user_id)
     F->>V: SET url:kX9mBzQ = "https://..." (TTL: 1hr)
     F-->>R: {"short_url": "http://localhost:8000/kX9mBzQ"}
     R-->>U: Display short URL with copy button
@@ -87,17 +119,28 @@ sequenceDiagram
 | Component | Responsibility | Why This Choice? |
 |---|---|---|
 | **React + Vite** | UI for URL shortening and history | Fast HMR, modern DX, simple SPA |
-| **FastAPI** | REST API, business logic, routing | Async-native, automatic OpenAPI docs, fast |
-| **PostgreSQL** | Persistent URL storage, click tracking | ACID compliance, reliable, great indexing |
+| **Keycloak** | User authentication (OIDC/OAuth2) | Enterprise-grade auth, easy realm config |
+| **FastAPI** | REST API, business logic, JWT validation | Async-native, automatic OpenAPI docs, fast |
+| **PostgreSQL** | Persistent URL + user storage, click tracking | ACID compliance, reliable, great indexing |
 | **Valkey** | Cache hot URLs, reduce DB load | Redis-compatible, sub-millisecond lookups |
 | **Docker Compose** | Orchestrate all services | One command to start everything |
 
 ## Communication Patterns
 
+### Frontend ↔ Keycloak
+- **Protocol:** OIDC (OpenID Connect)
+- **Flow:** Authorization Code with PKCE (public client)
+- **Library:** `keycloak-js`
+
 ### Frontend ↔ Backend
 - **Protocol:** HTTP/REST
 - **Format:** JSON
+- **Auth:** `Authorization: Bearer <JWT>` on protected endpoints
 - **CORS:** Enabled for `localhost:5173`
+
+### Backend ↔ Keycloak
+- **Verification:** JWKS endpoint (public key fetch, cached)
+- **Protocol:** HTTP (internal Docker network)
 
 ### Backend ↔ Cache (Valkey)
 - **Pattern:** Cache-Aside (Lazy Loading)
@@ -118,22 +161,24 @@ All services communicate over a shared Docker bridge network:
 graph LR
     subgraph Docker Network
         FE["frontend :5173"]
+        KC["keycloak :8080"]
         BE["backend :8000"]
         DB["postgres :5432"]
         CA["valkey :6379"]
-        DO["docs :8001"]
     end
 
-    FE -->|"API calls"| BE
+    FE -->|"OIDC login"| KC
+    FE -->|"API calls + JWT"| BE
+    BE -->|"JWKS verify"| KC
     BE -->|"queries"| DB
     BE -->|"cache ops"| CA
 
     style FE fill:#818cf8,color:#fff
+    style KC fill:#fb923c,color:#fff
     style BE fill:#34d399,color:#fff
     style DB fill:#60a5fa,color:#fff
     style CA fill:#f87171,color:#fff
-    style DO fill:#fbbf24,color:#000
 ```
 
 !!! info "Service Dependencies"
-    The backend waits for PostgreSQL and Valkey to be healthy before starting, ensuring database tables are created before serving requests.
+    The backend waits for PostgreSQL, Valkey, and Keycloak to be healthy before starting, ensuring database tables are created and JWKS endpoint is available before serving requests.

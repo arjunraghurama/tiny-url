@@ -4,6 +4,21 @@
 
 The TinyURL API follows **RESTful** conventions with JSON payloads. FastAPI provides automatic **OpenAPI/Swagger** documentation at `/docs`.
 
+## Authentication
+
+Protected endpoints require a `Bearer` token in the `Authorization` header:
+
+```
+Authorization: Bearer <keycloak-jwt-token>
+```
+
+| Endpoint | Auth |
+|---|---|
+| `POST /api/shorten` | ✅ Required |
+| `GET /api/urls/recent` | ⚡ Optional (filters by user) |
+| `GET /{short_code}` | ❌ Public |
+| `GET /api/urls/{code}/stats` | ❌ Public |
+
 ## Endpoints
 
 ### Create Short URL
@@ -12,9 +27,16 @@ The TinyURL API follows **RESTful** conventions with JSON payloads. FastAPI prov
 POST /api/shorten
 ```
 
-Accepts a long URL and returns a shortened version.
+🔒 **Requires authentication.**
+
+Accepts a long URL and returns a shortened version linked to the authenticated user.
 
 === "Request"
+
+    ```
+    Authorization: Bearer <token>
+    Content-Type: application/json
+    ```
 
     ```json
     {
@@ -99,7 +121,7 @@ Returns click count and metadata for a shortened URL.
 GET /api/urls/recent
 ```
 
-Returns the 10 most recently created short URLs.
+⚡ **Optional authentication.** When authenticated, returns the user's URLs. Otherwise returns global recent URLs.
 
 === "Response (200)"
 

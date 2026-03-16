@@ -11,6 +11,7 @@ repo_name = "arjunraghurama/tiny-url"
 nav = [
     {"Home" = "index.md"},
     {"System Architecture" = ["architecture.md"]},
+    {"Authentication" = ["authentication.md"]},
     {"Database Design" = ["database-design.md"]},
     {"Caching Strategy" = ["caching-strategy.md"]},
     {"API Design" = ["api-design.md"]},

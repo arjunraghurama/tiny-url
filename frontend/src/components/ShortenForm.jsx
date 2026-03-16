@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { shortenUrl } from '../api';
 
-export default function ShortenForm({ onUrlCreated }) {
+export default function ShortenForm({ onUrlCreated, isAuthenticated, getToken, onLogin }) {
   const [url, setUrl] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -16,9 +16,15 @@ export default function ShortenForm({ onUrlCreated }) {
 
     if (!url.trim()) return;
 
+    if (!isAuthenticated) {
+      setError('Please sign in to shorten URLs');
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await shortenUrl(url);
+      const token = await getToken();
+      const data = await shortenUrl(url, token);
       setResult(data);
       setUrl('');
       if (onUrlCreated) onUrlCreated();
@@ -56,19 +62,30 @@ export default function ShortenForm({ onUrlCreated }) {
             required
             disabled={loading}
           />
-          <button id="shorten-btn" type="submit" disabled={loading || !url.trim()}>
-            {loading ? (
-              <span className="spinner" />
-            ) : (
-              <>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                  <polyline points="12 5 19 12 12 19" />
-                </svg>
-                Shorten
-              </>
-            )}
-          </button>
+          {isAuthenticated ? (
+            <button id="shorten-btn" type="submit" disabled={loading || !url.trim()}>
+              {loading ? (
+                <span className="spinner" />
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
+                  Shorten
+                </>
+              )}
+            </button>
+          ) : (
+            <button type="button" className="login-to-shorten-btn" onClick={onLogin}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                <polyline points="10 17 15 12 10 7" />
+                <line x1="15" y1="12" x2="3" y2="12" />
+              </svg>
+              Sign in to Shorten
+            </button>
+          )}
         </div>
       </form>
 

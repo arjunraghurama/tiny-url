@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     BASE_URL: str = "http://localhost:8000"
     SHORT_CODE_LENGTH: int = 7
 
+    # Keycloak
+    KEYCLOAK_URL: str = "http://keycloak:8080"
+    KEYCLOAK_REALM: str = "myrealm"
+    KEYCLOAK_CLIENT_ID: str = "react-client"
+
     class Config:
         env_file = ".env"
 

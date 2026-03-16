@@ -1,3 +1,4 @@
+import uuid
 import secrets
 import string
 import logging
@@ -5,7 +6,7 @@ import logging
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import URL
+from app.models import URL, User
 from app.cache import cache
 from app.config import settings
 
@@ -43,15 +44,43 @@ async def _code_exists(db: AsyncSession, short_code: str) -> bool:
     return result.scalar_one_or_none() is not None
 
 
-async def create_short_url(db: AsyncSession, original_url: str) -> URL:
+async def _get_or_create_user(db: AsyncSession, user_info: dict) -> User:
+    """
+    Get or create a User record from Keycloak token claims.
+
+    On first login, a User row is auto-created from the JWT claims.
+    On subsequent requests, the existing row is returned.
+    """
+    keycloak_id = uuid.UUID(user_info["sub"])
+
+    result = await db.execute(select(User).where(User.id == keycloak_id))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        user = User(
+            id=keycloak_id,
+            email=user_info.get("email", ""),
+            username=user_info.get("preferred_username", ""),
+        )
+        db.add(user)
+        await db.flush()
+        logger.info("Created new user: %s (%s)", user.username, user.id)
+
+    return user
+
+
+async def create_short_url(
+    db: AsyncSession, original_url: str, user_info: dict | None = None
+) -> URL:
     """
     Create a new shortened URL with a random short code.
 
     Flow:
     1. Generate a random alphanumeric code (e.g., "kX9mBzQ")
     2. Check for collision (extremely rare, but possible)
-    3. Insert into PostgreSQL
-    4. Cache the mapping in Valkey
+    3. Link to authenticated user (if provided)
+    4. Insert into PostgreSQL
+    5. Cache the mapping in Valkey
 
     Unlike sequential Base62 encoding, random codes:
     - Cannot be enumerated (no guessing the next URL)
@@ -68,10 +97,17 @@ async def create_short_url(db: AsyncSession, original_url: str) -> URL:
     else:
         raise RuntimeError("Failed to generate unique short code after max retries")
 
+    # Resolve user if authenticated
+    user_id = None
+    if user_info:
+        user = await _get_or_create_user(db, user_info)
+        user_id = user.id
+
     # Insert the URL record
     url_record = URL(
         original_url=str(original_url),
         short_code=short_code,
+        user_id=user_id,
     )
     db.add(url_record)
     await db.flush()
@@ -131,11 +167,21 @@ async def get_url_stats(db: AsyncSession, short_code: str) -> URL | None:
     return result.scalar_one_or_none()
 
 
-async def get_recent_urls(db: AsyncSession, limit: int = 10) -> list[URL]:
-    """Get the most recently created URLs."""
-    result = await db.execute(
-        select(URL).order_by(URL.created_at.desc()).limit(limit)
-    )
+async def get_recent_urls(
+    db: AsyncSession, limit: int = 10, user_id: str | None = None
+) -> list[URL]:
+    """
+    Get the most recently created URLs.
+
+    If user_id is provided, returns only that user's URLs.
+    Otherwise returns the most recent global URLs.
+    """
+    query = select(URL)
+    if user_id:
+        query = query.where(URL.user_id == uuid.UUID(user_id))
+    query = query.order_by(URL.created_at.desc()).limit(limit)
+
+    result = await db.execute(query)
     return list(result.scalars().all())
 
 

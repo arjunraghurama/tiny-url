@@ -10,6 +10,7 @@ Welcome to the **TinyURL System Design** documentation! This project teaches cor
 | **Database Design** | Schema design, indexing, and random code generation |
 | **Caching** | Cache-aside pattern with Valkey (Redis-compatible) |
 | **API Design** | RESTful API design with FastAPI |
+| **Authentication** | OIDC/OAuth2 with Keycloak, JWT validation |
 | **Scaling** | Horizontal scaling, sharding, and load balancing |
 | **Trade-offs** | Real-world engineering decisions and their impacts |
 
@@ -17,7 +18,9 @@ Welcome to the **TinyURL System Design** documentation! This project teaches cor
 
 ```mermaid
 graph LR
-    A["🌐 React + Vite"] -->|REST API| B["⚡ FastAPI"]
+    A["🌐 React + Vite"] -->|OIDC| KC["🔐 Keycloak"]
+    A -->|REST API + JWT| B["⚡ FastAPI"]
+    B -->|JWKS Verify| KC
     B -->|Cache-Aside| C["🔴 Valkey"]
     B -->|Persistent Storage| D["🐘 PostgreSQL"]
 ```
@@ -25,7 +28,8 @@ graph LR
 | Layer | Technology | Purpose |
 |---|---|---|
 | Frontend | React + Vite | Single-page UI for shortening URLs |
-| Backend | FastAPI (Python) | REST API with async support |
+| Auth | Keycloak | OIDC identity provider |
+| Backend | FastAPI (Python) | REST API with async support + JWT validation |
 | Cache | Valkey | Redis-compatible in-memory cache |
 | Database | PostgreSQL | Persistent URL storage |
 | Docs | Zensical | This documentation site |
